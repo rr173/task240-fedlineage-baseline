@@ -2,7 +2,7 @@
   "project": "task240-fedlineage",
   "requirement_id": "REQ-20260823-104",
   "project_path": "task0824/task240-fedlineage/env",
-  "baseline_commit": "0ab4f7e4b7bf3b2014c306e9c039852c9c4a52ee",
+  "baseline_commit": "aabaee9879fe12095de6528a8c3756fd20d4f90a",
   "go_version": "go1.26.3",
   "go_mod_version": "1.26.3",
   "go_bin": "/opt/homebrew/bin/go",
@@ -12,7 +12,10 @@
     "builder": "golang:1.26.3-bookworm",
     "runtime": "golang:1.26.3-bookworm"
   },
-  "target_platforms": ["linux/amd64", "linux/arm64"],
+  "target_platforms": [
+    "linux/amd64",
+    "linux/arm64"
+  ],
   "components": {
     "sqlite": "3.46.1",
     "modernc_org_sqlite": "v1.52.0"
@@ -75,9 +78,23 @@
   "cross_project_similarity_audit": {
     "status": "passed",
     "candidate_project": "task240-fedlineage",
-    "nearest_projects": ["task215-fiberlineage", "task162-archverify", "task147-cableguard"],
-    "same_elements": ["SQLite 持久化", "HTTP /api 层", "参数摘要哈希", "不可变快照思路"],
-    "different_elements": ["领域模型(聚合轮次/客户端更新/模型节点)", "状态机(轮次/更新/节点/快照四套)", "表结构(global_models/aggregate_rounds/client_updates/lineage_edges/round_snapshots/verifications)", "API(谱系校验/分叉检测/重放隔离/祖先路径)"],
+    "nearest_projects": [
+      "task215-fiberlineage",
+      "task162-archverify",
+      "task147-cableguard"
+    ],
+    "same_elements": [
+      "SQLite 持久化",
+      "HTTP /api 层",
+      "参数摘要哈希",
+      "不可变快照思路"
+    ],
+    "different_elements": [
+      "领域模型(聚合轮次/客户端更新/模型节点)",
+      "状态机(轮次/更新/节点/快照四套)",
+      "表结构(global_models/aggregate_rounds/client_updates/lineage_edges/round_snapshots/verifications)",
+      "API(谱系校验/分叉检测/重放隔离/祖先路径)"
+    ],
     "conclusion": "与最相近项目仅在通用设施层重叠，领域模型、状态机、表与 API 全部不同，非换皮"
   },
   "requirement_traceability": {
