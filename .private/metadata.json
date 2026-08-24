@@ -1,0 +1,148 @@
+{
+  "project": "task240-fedlineage",
+  "requirement_id": "REQ-20260823-104",
+  "project_path": "task0824/task240-fedlineage/env",
+  "baseline_commit": "0ab4f7e4b7bf3b2014c306e9c039852c9c4a52ee",
+  "go_version": "go1.26.3",
+  "go_mod_version": "1.26.3",
+  "go_bin": "/opt/homebrew/bin/go",
+  "go_proxy": "https://goproxy.cn,direct",
+  "go_sumdb": "sum.golang.google.cn",
+  "docker_images": {
+    "builder": "golang:1.26.3-bookworm",
+    "runtime": "golang:1.26.3-bookworm"
+  },
+  "target_platforms": ["linux/amd64", "linux/arm64"],
+  "components": {
+    "sqlite": "3.46.1",
+    "modernc_org_sqlite": "v1.52.0"
+  },
+  "source_scale": {
+    "production_go_files": 20,
+    "production_go_lines": 2254,
+    "test_files": 1
+  },
+  "source_metrics": {
+    "production_go_files": 20,
+    "production_go_lines": 2254,
+    "test_files": 1,
+    "http_api_count": 30,
+    "business_packages": 10
+  },
+  "question_qualification": {
+    "status": "passed",
+    "comparison_corpus": "需求池 REQ-001 至 REQ-20260823-117，以及最相近项目 task215-fiberlineage（纤维谱系）、task162-archverify、task147-cableguard",
+    "nearest_requirements": [
+      {
+        "req": "REQ-068",
+        "shared_surface": "均校验依赖/祖先关系一致性",
+        "material_difference": "REQ-068 检查编译失效与增量依赖，本题约束模型参数摘要与轮次父节点"
+      },
+      {
+        "req": "REQ-097",
+        "shared_surface": "均做因果/跨度推理",
+        "material_difference": "REQ-097 处理日志因果跨度，本题处理联邦聚合更新的谱系父边"
+      },
+      {
+        "req": "REQ-043",
+        "shared_surface": "均涉及签名/一致性校验",
+        "material_difference": "REQ-043 校验签名转录，本题校验参数形状与父模型确认态"
+      }
+    ],
+    "closest_projects": [
+      {
+        "project": "task215-fiberlineage",
+        "shared_surface": "均维护谱系图与父/子边、环检测",
+        "material_difference": "fiberlineage 是材料科学纤维谱系继承；本题是联邦学习模型参数摘要谱系，核心实体为聚合轮次/客户端更新/模型节点，状态机与 API 完全不同"
+      },
+      {
+        "project": "task162-archverify",
+        "shared_surface": "均做一致性校验后端",
+        "material_difference": "archverify 校验架构约束；本题校验模型更新祖先关系与分叉/重放隔离"
+      },
+      {
+        "project": "task147-cableguard",
+        "shared_surface": "均暴露 /api 校验后端",
+        "material_difference": "cableguard 判定线缆缺陷；本题判定联邦更新谱系合法性"
+      }
+    ],
+    "core_loop": "登记轮次→接收更新(幂等)→停止接收→谱系校验(父模型+形状)→隔离分叉/重放→聚合确认→发布不可变快照→封存",
+    "state_machine": "轮次 preparing→receiving→validating→aggregable→sealed；更新 new→valid|replay|forked→isolated；节点 candidate→confirmed|stale|conflicted；快照 draft→publish→supersede",
+    "storage_and_recovery": "SQLite(WAL) 六表；--smoke-test 关闭重开同一库验证轮次状态/更新数/快照 ID 不变",
+    "api_responsibilities": "30 个 /api 端点覆盖模型节点、轮次、更新、谱系校验、聚合、快照、自检",
+    "non_substitutable_difference": "即使把名词改为'数据更新'，其核心是由模型参数摘要+轮次父节点+聚合输入一致性构成的可验证谱系闭环，既有项目均不具此闭环"
+  },
+  "cross_project_similarity_audit": {
+    "status": "passed",
+    "candidate_project": "task240-fedlineage",
+    "nearest_projects": ["task215-fiberlineage", "task162-archverify", "task147-cableguard"],
+    "same_elements": ["SQLite 持久化", "HTTP /api 层", "参数摘要哈希", "不可变快照思路"],
+    "different_elements": ["领域模型(聚合轮次/客户端更新/模型节点)", "状态机(轮次/更新/节点/快照四套)", "表结构(global_models/aggregate_rounds/client_updates/lineage_edges/round_snapshots/verifications)", "API(谱系校验/分叉检测/重放隔离/祖先路径)"],
+    "conclusion": "与最相近项目仅在通用设施层重叠，领域模型、状态机、表与 API 全部不同，非换皮"
+  },
+  "requirement_traceability": {
+    "status": "passed",
+    "items": [
+      {
+        "requirement": "登记全局模型轮次",
+        "design_section": "§2 业务闭环 / §4 API",
+        "source_symbols": "round.Service.Register, store.PutRound",
+        "api": "POST /api/rounds/register",
+        "storage": "aggregate_rounds",
+        "e2e_evidence": "TestEndToEndReplay / --smoke-test"
+      },
+      {
+        "requirement": "接收客户端更新及其父摘要",
+        "design_section": "§2 / §4",
+        "source_symbols": "update.Service.Receive, store.PutUpdate",
+        "api": "POST /api/updates/receive",
+        "storage": "client_updates",
+        "e2e_evidence": "TestEndToEndReplay"
+      },
+      {
+        "requirement": "验证参数维度、父子关系和去重窗口",
+        "design_section": "§5 不变量",
+        "source_symbols": "lineage.Service.Verify, node.Service.DetectCycle",
+        "api": "POST /api/lineage/verify",
+        "storage": "verifications, lineage_edges",
+        "e2e_evidence": "TestForkDetection / TestEndToEndReplay"
+      },
+      {
+        "requirement": "检测分叉/重放",
+        "design_section": "§2 状态机",
+        "source_symbols": "lineage.Service.ForkedUpdates, update.Service.Receive(replay)",
+        "api": "GET /api/lineage/forks",
+        "storage": "client_updates(state=forked|replay)",
+        "e2e_evidence": "TestForkDetection / TestEndToEndReplay"
+      },
+      {
+        "requirement": "生成可聚合集合及异常路径",
+        "design_section": "§2 / §4",
+        "source_symbols": "aggregate.Service.Compute, aggregate.Service.Audit",
+        "api": "POST /api/aggregate/compute, POST /api/aggregate/audit",
+        "storage": "client_updates(state)",
+        "e2e_evidence": "TestEndToEndReplay"
+      },
+      {
+        "requirement": "隔离更新并发布轮次快照",
+        "design_section": "§2 / §4",
+        "source_symbols": "update.Service.Isolate, snapshot.Service.Publish",
+        "api": "POST /api/updates/isolate, POST /api/snapshots/publish",
+        "storage": "client_updates(state=isolated), round_snapshots",
+        "e2e_evidence": "TestEndToEndReplay (s1 published)"
+      },
+      {
+        "requirement": "重启恢复与封存冻结",
+        "design_section": "§3 持久化",
+        "source_symbols": "store.Open(WAL), round.Service.Seal",
+        "api": "POST /api/rounds/seal",
+        "storage": "全部表",
+        "e2e_evidence": "--smoke-test 重开库断言"
+      }
+    ],
+    "blocking_gaps": []
+  },
+  "acceptance_status": "pending-annotation",
+  "acceptance_blockers": [],
+  "metadata_status": "complete"
+}
