@@ -2,15 +2,15 @@
   "project": "task240-fedlineage",
   "requirement_id": "REQ-20260823-104",
   "project_path": "task0824/task240-fedlineage/env",
-  "baseline_commit": "aabaee9879fe12095de6528a8c3756fd20d4f90a",
+  "baseline_commit": "pending-final-health-commit",
   "go_version": "go1.26.3",
   "go_mod_version": "1.26.3",
   "go_bin": "/opt/homebrew/bin/go",
   "go_proxy": "https://goproxy.cn,direct",
   "go_sumdb": "sum.golang.google.cn",
   "docker_images": {
-    "builder": "golang:1.26.3-bookworm",
-    "runtime": "golang:1.26.3-bookworm"
+    "builder": "docker.m.daocloud.io/library/golang:1.26.3-bookworm",
+    "runtime": "docker.m.daocloud.io/library/alpine:3.20"
   },
   "target_platforms": [
     "linux/amd64",
@@ -22,13 +22,13 @@
   },
   "source_scale": {
     "production_go_files": 20,
-    "production_go_lines": 2254,
-    "test_files": 1
+    "production_go_lines": 2044,
+    "test_files": 7
   },
   "source_metrics": {
     "production_go_files": 20,
-    "production_go_lines": 2254,
-    "test_files": 1,
+    "production_go_lines": 2044,
+    "test_files": 7,
     "http_api_count": 30,
     "business_packages": 10
   },
@@ -159,7 +159,7 @@
     ],
     "blocking_gaps": []
   },
-  "acceptance_status": "pending-annotation",
+  "acceptance_status": "health-fixed-pending-derivation",
   "acceptance_blockers": [],
   "metadata_status": "complete"
 }

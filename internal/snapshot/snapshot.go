@@ -40,6 +40,11 @@ func (s *Service) Publish(id, roundID string) (*model.RoundSnapshot, error) {
 	if _, err := s.store.GetSnapshot(id); err == nil {
 		return nil, fmt.Errorf("%w: snapshot %s", model.ErrDuplicateID, id)
 	}
+	if current, err := s.store.GetPublishedSnapshot(roundID); err == nil && current.State == model.SnapshotStatePublish {
+		return nil, fmt.Errorf("%w: round %s already has snapshot %s", model.ErrSnapshotConflict, roundID, current.ID)
+	} else if err != nil && err != model.ErrNotFound {
+		return nil, err
+	}
 	set, err := s.aggregate.Compute(roundID)
 	if err != nil {
 		return nil, err

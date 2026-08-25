@@ -26,11 +26,8 @@ func New(s *store.Store, rs *round.Service) *Service {
 // Receive 接收一个客户端更新。幂等：相同 ID 的重复写入视为重放。
 // 仅做接收与去重，谱系校验由 lineage 包完成。
 func (s *Service) Receive(u *model.ClientUpdate) (*model.ClientUpdate, error) {
-	if u.ID == "" {
-		return nil, fmt.Errorf("%w: update id empty", model.ErrDuplicateID)
-	}
-	if u.ParamDigest == "" {
-		return nil, model.ErrParamMissing
+	if err := model.ValidateUpdateInput(u); err != nil {
+		return nil, err
 	}
 	receiving, err := s.round.IsReceiving(u.RoundID)
 	if err != nil {
@@ -42,6 +39,9 @@ func (s *Service) Receive(u *model.ClientUpdate) (*model.ClientUpdate, error) {
 	// 幂等检查：已存在相同 ID 更新 → 重放。
 	existing, err := s.store.GetUpdate(u.ID)
 	if err == nil {
+		if existing.RoundID != u.RoundID {
+			return nil, fmt.Errorf("%w: update %s belongs to round %s", model.ErrUpdateConflict, u.ID, existing.RoundID)
+		}
 		// 更新为 replay 状态并记录。
 		existing.State = model.UpdateStateReplay
 		existing.Reason = "duplicate update id within replay window"

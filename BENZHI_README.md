@@ -24,8 +24,13 @@ CGO_ENABLED=0 GOTOOLCHAIN=local go run ./cmd/fedlineage --smoke-test
 
 ```bash
 bash build_benzhi_docker.sh my-fedlineage linux/amd64
+docker run --rm --platform linux/amd64 my-fedlineage --smoke-test
 bash build_benzhi_docker.sh my-fedlineage linux/arm64
+docker run --rm --platform linux/arm64 my-fedlineage --smoke-test
 ```
+
+构建脚本只负责构建镜像；镜像默认入口是 `/app/fedlineage`，默认参数为
+`--smoke-test`，也可以显式传入该参数完成重启恢复自检。
 
 镜像 ENTRYPOINT 固定为 `/app/fedlineage`，默认 CMD 为 `--smoke-test`；
 评测仅传 flag，不传 `/app/fedlineage` 路径参数。

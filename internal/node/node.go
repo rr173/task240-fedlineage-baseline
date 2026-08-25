@@ -23,14 +23,30 @@ func New(s *store.Store) *Service {
 
 // Register 登记一个模型节点（候选态），可选父节点。
 func (s *Service) Register(id, parentID, roundID, paramDigest string, dimension int) (*model.GlobalModel, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: model id empty", model.ErrDuplicateID)
-	}
-	if paramDigest == "" {
-		return nil, model.ErrParamMissing
+	if err := model.ValidateModelInput(id, roundID, paramDigest, dimension); err != nil {
+		return nil, err
 	}
 	if _, err := s.store.GetModel(id); err == nil {
 		return nil, fmt.Errorf("%w: model %s", model.ErrDuplicateID, id)
+	}
+	if parentID != "" {
+		parent, err := s.store.GetModel(parentID)
+		if err != nil {
+			if err == model.ErrNotFound {
+				return nil, fmt.Errorf("%w: model %s", model.ErrParentMissing, parentID)
+			}
+			return nil, err
+		}
+		if parent.Dimension != dimension {
+			return nil, fmt.Errorf("%w: parent %d != child %d", model.ErrDigestMismatch, parent.Dimension, dimension)
+		}
+		cycle, err := s.DetectCycle(id, parentID)
+		if err != nil {
+			return nil, err
+		}
+		if cycle {
+			return nil, model.ErrCycle
+		}
 	}
 	m := &model.GlobalModel{
 		ID:          id,

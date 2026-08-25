@@ -5,6 +5,7 @@ package aggregate
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"task240-fedlineage/internal/model"
 	"task240-fedlineage/internal/round"
@@ -24,11 +25,11 @@ func New(s *store.Store, rs *round.Service) *Service {
 
 // AggregableSet 表示一个可聚合集合的摘要。
 type AggregableSet struct {
-	RoundID      string   `json:"round_id"`
-	UpdateCount  int      `json:"update_count"`
-	UpdateIDs    []string `json:"update_ids"`
-	Excluded     []ExcludedUpdate `json:"excluded"`
-	ExpectedDim  int      `json:"expected_dim"`
+	RoundID     string           `json:"round_id"`
+	UpdateCount int              `json:"update_count"`
+	UpdateIDs   []string         `json:"update_ids"`
+	Excluded    []ExcludedUpdate `json:"excluded"`
+	ExpectedDim int              `json:"expected_dim"`
 }
 
 // ExcludedUpdate 描述被排除的更新及原因。
@@ -61,6 +62,10 @@ func (s *Service) Compute(roundID string) (*AggregableSet, error) {
 			set.Excluded = append(set.Excluded, ExcludedUpdate{UpdateID: u.ID, State: u.State, Reason: u.Reason})
 		}
 	}
+	sort.Strings(set.UpdateIDs)
+	sort.Slice(set.Excluded, func(i, j int) bool {
+		return set.Excluded[i].UpdateID < set.Excluded[j].UpdateID
+	})
 	return set, nil
 }
 

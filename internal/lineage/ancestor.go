@@ -7,6 +7,9 @@ import (
 // AncestorPath 返回从给定模型节点到根节点的祖先路径（含自身）。
 // 用于回答“该更新声称的父模型究竟源自哪个确认模型”。
 func (s *Service) AncestorPath(child string) ([]string, error) {
+	if _, err := s.node.Get(child); err != nil {
+		return nil, err
+	}
 	path := []string{}
 	visited := map[string]bool{}
 	cur := child

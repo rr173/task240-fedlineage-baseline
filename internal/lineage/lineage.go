@@ -43,11 +43,16 @@ func (s *Service) Verify(updateID string) (*model.UpdateVerification, error) {
 	if err != nil {
 		return nil, err
 	}
+	if r.State != model.RoundStateValidating && r.State != model.RoundStateAggregable && r.State != model.RoundStateSealed {
+		return nil, fmt.Errorf("%w: round %s is not ready for verification", model.ErrInvalidState, r.ID)
+	}
 	// 形状校验：维度必须等于轮次期望。
 	if u.Dimension != r.ExpectedDim {
 		v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateForked,
 			Reason: fmt.Sprintf("dimension %d != expected %d", u.Dimension, r.ExpectedDim), VerifiedAt: s.now().UTC()}
-		s.record(u, model.UpdateStateForked, v.Reason)
+		if err := s.record(u, model.UpdateStateForked, v.Reason); err != nil {
+			return nil, err
+		}
 		return &v, nil
 	}
 	// 父模型校验：声明父模型必须存在且处于确认态。
@@ -56,34 +61,44 @@ func (s *Service) Verify(updateID string) (*model.UpdateVerification, error) {
 		if err != nil {
 			v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateForked,
 				Reason: "declared parent model not found", VerifiedAt: s.now().UTC()}
-			s.record(u, model.UpdateStateForked, v.Reason)
+			if err := s.record(u, model.UpdateStateForked, v.Reason); err != nil {
+				return nil, err
+			}
 			return &v, nil
 		}
 		if pm.State != model.NodeStateConfirmed {
 			v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateForked,
 				Reason: "parent model not confirmed", VerifiedAt: s.now().UTC()}
-			s.record(u, model.UpdateStateForked, v.Reason)
+			if err := s.record(u, model.UpdateStateForked, v.Reason); err != nil {
+				return nil, err
+			}
 			return &v, nil
 		}
 		// 形状指纹校验：父模型参数摘要维度指纹需与更新一致。
 		if pm.Dimension != u.Dimension {
 			v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateForked,
 				Reason: "parent model dimension mismatch", VerifiedAt: s.now().UTC()}
-			s.record(u, model.UpdateStateForked, v.Reason)
+			if err := s.record(u, model.UpdateStateForked, v.Reason); err != nil {
+				return nil, err
+			}
 			return &v, nil
 		}
 	}
 	v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateValid,
 		Reason: "parent relation and shape consistent", VerifiedAt: s.now().UTC()}
-	s.record(u, model.UpdateStateValid, v.Reason)
+	if err := s.record(u, model.UpdateStateValid, v.Reason); err != nil {
+		return nil, err
+	}
 	return &v, nil
 }
 
-func (s *Service) record(u *model.ClientUpdate, state, reason string) {
+func (s *Service) record(u *model.ClientUpdate, state, reason string) error {
 	u.State = state
 	u.Reason = reason
-	_ = s.store.PutUpdate(u)
-	_ = s.store.PutVerification(model.UpdateVerification{
+	if err := s.store.PutUpdate(u); err != nil {
+		return err
+	}
+	return s.store.PutVerification(model.UpdateVerification{
 		UpdateID: u.ID, RoundID: u.RoundID, Verdict: state, Reason: reason, VerifiedAt: s.now().UTC(),
 	})
 }

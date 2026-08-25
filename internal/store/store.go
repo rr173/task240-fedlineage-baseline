@@ -340,10 +340,13 @@ func (s *Store) AllEdges() ([]model.LineageEdge, error) {
 	out := []model.LineageEdge{}
 	for rows.Next() {
 		var c, p string
-		if err := rows.Scan(&c, p); err != nil {
+		if err := rows.Scan(&c, &p); err != nil {
 			return nil, fmt.Errorf("scan edge: %w", err)
 		}
 		out = append(out, model.LineageEdge{Child: c, Parent: p})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate edges: %w", err)
 	}
 	return out, nil
 }

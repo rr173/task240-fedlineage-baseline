@@ -26,8 +26,26 @@ func (s *Service) Register(id, parentRound string, expectedDim int) (*model.Aggr
 	if id == "" {
 		return nil, fmt.Errorf("%w: round id empty", model.ErrDuplicateID)
 	}
+	if err := model.ValidateDimension(expectedDim); err != nil {
+		return nil, err
+	}
+	if id == parentRound {
+		return nil, model.ErrCycle
+	}
 	if _, err := s.store.GetRound(id); err == nil {
 		return nil, fmt.Errorf("%w: round %s", model.ErrDuplicateID, id)
+	}
+	if parentRound != "" {
+		parent, err := s.store.GetRound(parentRound)
+		if err != nil {
+			if err == model.ErrNotFound {
+				return nil, fmt.Errorf("%w: round %s", model.ErrParentMissing, parentRound)
+			}
+			return nil, err
+		}
+		if parent.ExpectedDim != expectedDim {
+			return nil, fmt.Errorf("%w: parent %d != child %d", model.ErrDigestMismatch, parent.ExpectedDim, expectedDim)
+		}
 	}
 	r := &model.AggregateRound{
 		ID:          id,
