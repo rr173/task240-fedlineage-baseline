@@ -2,7 +2,7 @@
   "project": "task240-fedlineage",
   "requirement_id": "REQ-20260823-104",
   "project_path": "task0824/task240-fedlineage/env",
-  "baseline_commit": "d73ad96b81fab9680d8cce7d6888a8994664e1e6",
+  "baseline_commit": "764ce1fecdc052583225a4efc283eb0dd251ac62",
   "go_version": "go1.26.3",
   "go_mod_version": "1.26.3",
   "go_bin": "/opt/homebrew/bin/go",
@@ -22,12 +22,12 @@
   },
   "source_scale": {
     "production_go_files": 20,
-    "production_go_lines": 2044,
+    "production_go_lines": 2096,
     "test_files": 7
   },
   "source_metrics": {
     "production_go_files": 20,
-    "production_go_lines": 2044,
+    "production_go_lines": 2096,
     "test_files": 7,
     "http_api_count": 30,
     "business_packages": 10
@@ -159,7 +159,7 @@
     ],
     "blocking_gaps": []
   },
-  "acceptance_status": "health-fixed-pending-derivation",
+  "acceptance_status": "accepted-pending-derivation",
   "acceptance_blockers": [],
   "metadata_status": "complete"
 }
