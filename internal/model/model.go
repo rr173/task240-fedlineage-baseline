@@ -222,3 +222,14 @@ func ValidateUpdateTransition(from, to string) error {
 	}
 	return nil
 }
+
+// ValidateUpdateMutation combines the round lifecycle with the update state
+// machine. An update may be isolated only while its round remains mutable;
+// checking the two states together prevents a stale caller from mutating a
+// sealed round after it has already passed aggregation.
+func ValidateUpdateMutation(roundState, updateState, targetState string) error {
+	if roundState == RoundStateSealed {
+		return ErrSealedMutation
+	}
+	return ValidateUpdateTransition(updateState, targetState)
+}

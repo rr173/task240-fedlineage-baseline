@@ -80,7 +80,7 @@ func (s *Service) Isolate(id, reason string) (*model.ClientUpdate, error) {
 	if u.State == model.UpdateStateIsolated {
 		return u, nil
 	}
-	if err := model.ValidateUpdateTransition(u.State, model.UpdateStateIsolated); err != nil {
+	if err := s.round.ValidateUpdateMutation(u.RoundID, u.State, model.UpdateStateIsolated); err != nil {
 		// 允许从 new/valid/replay/forked 隔离。
 		return nil, err
 	}
