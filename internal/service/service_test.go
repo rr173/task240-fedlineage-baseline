@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -122,6 +123,87 @@ func TestForkDetection(t *testing.T) {
 	}
 	if len(forks) != 1 {
 		t.Fatalf("expected 1 fork, got %d", len(forks))
+	}
+}
+
+// TestSealedRoundRejectsUpdateMutation 复现并修复封存后修改的场景：
+// 轮次发布快照并封存后，仍对其中更新调用 Isolate 与 Verify，二者都必须
+// 拒绝修改且保持更新原状态，已封存聚合证据（快照摘要）不变。
+func TestSealedRoundRejectsUpdateMutation(t *testing.T) {
+	sv := newTestServices(t)
+
+	if _, err := sv.Node.Register("m-root", "", "r0", "d-root", 100); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Node.Confirm("m-root"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Round.Register("r3", "", 100); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Round.Open("r3"); err != nil {
+		t.Fatal(err)
+	}
+	upd := &model.ClientUpdate{ID: "u1", RoundID: "r3", ClientID: "c1", ParentModel: "m-root", ParamDigest: "d-root", Dimension: 100}
+	if _, err := sv.Update.Receive(upd); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Round.Close("r3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Lineage.VerifyRound("r3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Aggregate.Confirm("r3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Snapshot.Publish("s1", "r3"); err != nil {
+		t.Fatal(err)
+	}
+	// 封存前固化快照摘要作为基线证据。
+	before, err := sv.Snapshot.Published("r3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Round.Seal("r3"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 封存后隔离同轮次更新：必须拒绝并返回 ErrSealedMutation，更新保持 valid。
+	if _, err := sv.Update.Isolate("u1", "late isolation after seal"); !errors.Is(err, model.ErrSealedMutation) {
+		t.Fatalf("expected ErrSealedMutation, got %v", err)
+	}
+	u, err := sv.Update.Get("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.State != model.UpdateStateValid {
+		t.Fatalf("sealed round update state changed: %s", u.State)
+	}
+
+	// 封存后再次校验：必须只读，不得改写状态（不报错、不变更）。
+	v, err := sv.Lineage.Verify("u1")
+	if err != nil {
+		t.Fatalf("verify on sealed round errored: %v", err)
+	}
+	if v.Verdict != model.UpdateStateValid {
+		t.Fatalf("sealed verify should echo current state, got %s", v.Verdict)
+	}
+	u2, err := sv.Update.Get("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u2.State != model.UpdateStateValid {
+		t.Fatalf("sealed round verify mutated state: %s", u2.State)
+	}
+
+	// 已封存聚合证据（快照摘要）保持不变。
+	after, err := sv.Snapshot.Published("r3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Summary != before.Summary {
+		t.Fatalf("sealed aggregate evidence changed:\nbefore: %s\nafter:  %s", before.Summary, after.Summary)
 	}
 }
 

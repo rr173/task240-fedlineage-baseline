@@ -225,8 +225,13 @@ func ValidateUpdateTransition(from, to string) error {
 
 // ValidateUpdateMutation combines the round lifecycle with the update state
 // machine. An update may be isolated only while its round remains mutable;
-// checking the two states together prevents a stale caller from mutating a
-// sealed round after it has already passed aggregation.
+// once the round is sealed its aggregated evidence is frozen, so any direct
+// state change is rejected with ErrSealedMutation regardless of the update's
+// own transition. This prevents a stale caller from mutating a sealed round
+// after it has already passed aggregation and snapshot publication.
 func ValidateUpdateMutation(roundState, updateState, targetState string) error {
+	if roundState == RoundStateSealed {
+		return fmt.Errorf("%w: round %s", ErrSealedMutation, RoundStateSealed)
+	}
 	return ValidateUpdateTransition(updateState, targetState)
 }

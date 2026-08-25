@@ -43,7 +43,12 @@ func (s *Service) Verify(updateID string) (*model.UpdateVerification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.State != model.RoundStateValidating && r.State != model.RoundStateAggregable && r.State != model.RoundStateSealed {
+	// 封存轮次只读：聚合证据已冻结，禁止任何状态改写，仅返回当前判定。
+	if r.State == model.RoundStateSealed {
+		return &model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: u.State,
+			Reason: "skipped: sealed round is read-only", VerifiedAt: s.now().UTC()}, nil
+	}
+	if r.State != model.RoundStateValidating && r.State != model.RoundStateAggregable {
 		return nil, fmt.Errorf("%w: round %s is not ready for verification", model.ErrInvalidState, r.ID)
 	}
 	// 形状校验：维度必须等于轮次期望。

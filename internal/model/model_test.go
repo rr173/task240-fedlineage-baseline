@@ -32,3 +32,19 @@ func TestStateTransitionsRejectTerminalMutation(t *testing.T) {
 		t.Fatalf("isolated update accepted reverse transition: %v", err)
 	}
 }
+
+// TestValidateUpdateMutationRejectsSealedRound 确认封存轮次上的更新迁移被拒绝：
+// 聚合证据已冻结，任何状态改写都应返回 ErrSealedMutation。
+func TestValidateUpdateMutationRejectsSealedRound(t *testing.T) {
+	// 可变轮次：合法迁移放行。
+	if err := model.ValidateUpdateMutation(model.RoundStateAggregable, model.UpdateStateValid, model.UpdateStateIsolated); err != nil {
+		t.Fatalf("valid update in mutable round should be isolatable: %v", err)
+	}
+	// 封存轮次：无论原本迁移是否合法，一律拒绝并返回 ErrSealedMutation。
+	if err := model.ValidateUpdateMutation(model.RoundStateSealed, model.UpdateStateValid, model.UpdateStateIsolated); !errors.Is(err, model.ErrSealedMutation) {
+		t.Fatalf("sealed round accepted mutation: %v", err)
+	}
+	if err := model.ValidateUpdateMutation(model.RoundStateSealed, model.UpdateStateNew, model.UpdateStateValid); !errors.Is(err, model.ErrSealedMutation) {
+		t.Fatalf("sealed round accepted verify-time mutation: %v", err)
+	}
+}

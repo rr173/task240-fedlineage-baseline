@@ -156,11 +156,12 @@ func (s *Service) IsSealed(id string) (bool, error) {
 
 // ValidateUpdateMutation checks whether an update belonging to a round can
 // still change state. The round service owns the persisted lifecycle lookup so
-// callers do not accidentally validate against an in-memory copy.
+// callers do not accidentally validate against an in-memory copy. Sealed
+// rounds are frozen: any mutation is rejected with ErrSealedMutation.
 func (s *Service) ValidateUpdateMutation(roundID, updateState, targetState string) error {
-	_, err := s.store.GetRound(roundID)
+	r, err := s.store.GetRound(roundID)
 	if err != nil {
 		return err
 	}
-	return model.ValidateUpdateTransition(updateState, targetState)
+	return model.ValidateUpdateMutation(r.State, updateState, targetState)
 }

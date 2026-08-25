@@ -72,6 +72,7 @@ func (s *Service) ListByRound(roundID string) ([]*model.ClientUpdate, error) {
 }
 
 // Isolate 主动隔离一个更新（研究员判定其异常）。
+// 封存轮次中的更新不可再隔离：其聚合证据已冻结，拒绝修改以保持原状态。
 func (s *Service) Isolate(id, reason string) (*model.ClientUpdate, error) {
 	u, err := s.store.GetUpdate(id)
 	if err != nil {
@@ -80,8 +81,8 @@ func (s *Service) Isolate(id, reason string) (*model.ClientUpdate, error) {
 	if u.State == model.UpdateStateIsolated {
 		return u, nil
 	}
-	if err := model.ValidateUpdateTransition(u.State, model.UpdateStateIsolated); err != nil {
-		// 允许从 new/valid/replay/forked 隔离。
+	// 结合轮次生命周期校验迁移：封存轮次拒绝任何状态变更。
+	if err := s.round.ValidateUpdateMutation(u.RoundID, u.State, model.UpdateStateIsolated); err != nil {
 		return nil, err
 	}
 	u.State = model.UpdateStateIsolated
