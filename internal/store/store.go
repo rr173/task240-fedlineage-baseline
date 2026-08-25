@@ -234,6 +234,35 @@ func (s *Store) PutUpdate(u *model.ClientUpdate) error {
 	return nil
 }
 
+// ClaimUpdateInsert atomically inserts a client update as the first-write for an
+// idempotency key. It uses INSERT ... ON CONFLICT DO NOTHING so that, under
+// concurrent submissions of the same ID, exactly one caller wins the insert.
+// The returned created flag is true only when this call actually inserted the
+// row (RowsAffected == 1); every concurrent loser observes created == false and
+// must treat the ID as a duplicate. The full identity fields are persisted on
+// the winning insert, so a later re-read reflects the first writer's content —
+// not whatever a racing caller happened to pass. No state transition is
+// performed here: the caller decides new vs. replay/conflict after inspecting
+// the persisted row.
+func (s *Store) ClaimUpdateInsert(u *model.ClientUpdate) (created bool, err error) {
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = time.Now().UTC()
+	}
+	res, err := s.db.Exec(
+		`INSERT INTO client_updates (id, round_id, client_id, parent_model, param_digest, dimension, state, reason, created_at)
+		 VALUES (?,?,?,?,?,?,?,?,?)
+		 ON CONFLICT(id) DO NOTHING;`,
+		u.ID, u.RoundID, u.ClientID, u.ParentModel, u.ParamDigest, u.Dimension, u.State, u.Reason, nowStr())
+	if err != nil {
+		return false, fmt.Errorf("claim update: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("claim update result: %w", err)
+	}
+	return n == 1, nil
+}
+
 // PutPublishedSnapshotIfAbsent claims the single current publish slot for a
 // round in one SQLite statement. The caller may then safely report a conflict
 // when another writer won the race.

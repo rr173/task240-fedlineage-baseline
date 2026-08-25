@@ -81,8 +81,8 @@ func runSmokeTest(dbPath string) error {
 	if _, err := sv.Update.Receive(&model.ClientUpdate{ID: "upd-2", RoundID: "round-1", ClientID: "client-b", ParentModel: "model-root", ParamDigest: "digest-root", Dimension: 100}); err != nil {
 		return fmt.Errorf("receive upd-2: %w", err)
 	}
-	// 重放：相同 ID。
-	if _, err := sv.Update.Receive(&model.ClientUpdate{ID: "upd-1", RoundID: "round-1", ClientID: "client-c", ParentModel: "model-root", ParamDigest: "digest-root", Dimension: 100}); err != nil {
+	// 重放：相同 ID 且身份字段一致（仅作为去重重放，不改变身份）。
+	if _, err := sv.Update.Receive(&model.ClientUpdate{ID: "upd-1", RoundID: "round-1", ClientID: "client-a", ParentModel: "model-root", ParamDigest: "digest-root", Dimension: 100}); err != nil {
 		return fmt.Errorf("replay upd-1: %w", err)
 	}
 	// 4) 停止接收并校验。

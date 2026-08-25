@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -46,8 +47,8 @@ func TestEndToEndReplay(t *testing.T) {
 	if _, err := sv.Update.Receive(upd("u2", "c2")); err != nil {
 		t.Fatal(err)
 	}
-	// 重放 u1。
-	r, err := sv.Update.Receive(upd("u1", "c3"))
+	// 重放 u1：身份字段完全一致，仅作为去重重放。
+	r, err := sv.Update.Receive(upd("u1", "c1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +88,108 @@ func TestEndToEndReplay(t *testing.T) {
 	}
 	if rnd.State != model.RoundStateSealed {
 		t.Fatalf("expected sealed, got %s", rnd.State)
+	}
+}
+
+// TestConcurrentReceiveProducesSingleFirstRecord 锁定并发修复：多个 goroutine
+// 同时提交同一 ID 时，仅一个产生首次记录（new），其余成为重放（replay）。
+func TestConcurrentReceiveProducesSingleFirstRecord(t *testing.T) {
+	sv := newTestServices(t)
+	if _, err := sv.Round.Register("r1", "", 8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Round.Open("r1"); err != nil {
+		t.Fatal(err)
+	}
+	const n = 32
+	type result struct {
+		state string
+		err   error
+	}
+	res := make(chan result, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			r, err := sv.Update.Receive(&model.ClientUpdate{
+				ID: "u1", RoundID: "r1", ClientID: "c1",
+				ParentModel: "", ParamDigest: "d", Dimension: 8,
+			})
+			if err != nil {
+				res <- result{err: err}
+				return
+			}
+			res <- result{state: r.State}
+		}()
+	}
+	var firsts, replays, errs int
+	for i := 0; i < n; i++ {
+		got := <-res
+		switch {
+		case got.err != nil:
+			errs++
+		case got.state == model.UpdateStateNew:
+			firsts++
+		case got.state == model.UpdateStateReplay:
+			replays++
+		}
+	}
+	if firsts != 1 {
+		t.Fatalf("expected exactly 1 first record, got %d (replays=%d errs=%d)", firsts, replays, errs)
+	}
+	if firsts+replays+errs != n {
+		t.Fatalf("lost results: firsts=%d replays=%d errs=%d total=%d", firsts, replays, errs, n)
+	}
+	// 库中该 ID 仅一行，状态为 replay（被并发重放者覆写）。
+	got, err := sv.Update.Get("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != model.UpdateStateReplay {
+		t.Fatalf("expected persisted replay, got %s", got.State)
+	}
+}
+
+// TestReceiveIdentityChangeReturnsConflict 锁定身份冲突修复：相同 ID 但身份字段
+// （客户端/参数摘要/维度/父模型）变化的重复提交返回冲突，而非普通重放。
+func TestReceiveIdentityChangeReturnsConflict(t *testing.T) {
+	sv := newTestServices(t)
+	if _, err := sv.Round.Register("r1", "", 8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Round.Open("r1"); err != nil {
+		t.Fatal(err)
+	}
+	base := func() *model.ClientUpdate {
+		return &model.ClientUpdate{ID: "u1", RoundID: "r1", ClientID: "c1", ParentModel: "", ParamDigest: "d", Dimension: 8}
+	}
+	if _, err := sv.Update.Receive(base()); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		mut  func(u *model.ClientUpdate)
+	}{
+		{"client_id", func(u *model.ClientUpdate) { u.ClientID = "c2" }},
+		{"param_digest", func(u *model.ClientUpdate) { u.ParamDigest = "d2" }},
+		{"dimension", func(u *model.ClientUpdate) { u.Dimension = 16 }},
+		{"parent_model", func(u *model.ClientUpdate) { u.ParentModel = "m0" }},
+	}
+	for _, c := range cases {
+		u := base()
+		c.mut(u)
+		if _, err := sv.Update.Receive(u); !errors.Is(err, model.ErrUpdateConflict) {
+			t.Fatalf("%s: expected conflict, got %v", c.name, err)
+		}
+	}
+	// 首记录本身不被篡改：状态仍是 new，身份仍是首次写入值。
+	got, err := sv.Update.Get("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != model.UpdateStateNew {
+		t.Fatalf("first record mutated to %s", got.State)
+	}
+	if got.ClientID != "c1" || got.ParamDigest != "d" || got.Dimension != 8 || got.ParentModel != "" {
+		t.Fatalf("first record identity mutated: %#v", got)
 	}
 }
 

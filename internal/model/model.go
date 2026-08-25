@@ -176,14 +176,28 @@ func ValidateUpdateInput(u *ClientUpdate) error {
 	return ValidateDimension(u.Dimension)
 }
 
-// ValidateReplayIdentity distinguishes a legitimate replay from an attempt
-// to move an idempotency key into another aggregate round.
+// ValidateReplayIdentity distinguishes a legitimate replay from an attempt to
+// move an idempotency key into another aggregate round or to mutate the
+// identity of an update already recorded under that key.
+//
+// A replay is legitimate only when every identity field matches the first
+// writer's record: round, client, declared parent model, parameter digest and
+// dimension. Any divergence is an update-id conflict, not a replay — a
+// resubmission that claims a different identity under the same idempotency key
+// must surface as a conflict rather than being silently absorbed as an ordinary
+// replay.
 func ValidateReplayIdentity(existing, incoming *ClientUpdate) error {
 	if existing == nil || incoming == nil {
 		return fmt.Errorf("%w: replay identity is nil", ErrUpdateConflict)
 	}
 	if existing.RoundID != incoming.RoundID {
 		return fmt.Errorf("%w: update %s belongs to round %s", ErrUpdateConflict, existing.ID, existing.RoundID)
+	}
+	if existing.ClientID != incoming.ClientID ||
+		existing.ParentModel != incoming.ParentModel ||
+		existing.ParamDigest != incoming.ParamDigest ||
+		existing.Dimension != incoming.Dimension {
+		return fmt.Errorf("%w: update %s identity changed", ErrUpdateConflict, existing.ID)
 	}
 	return nil
 }
