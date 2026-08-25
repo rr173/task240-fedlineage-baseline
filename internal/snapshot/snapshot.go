@@ -3,6 +3,7 @@
 package snapshot
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -50,6 +51,14 @@ func (s *Service) Publish(id, roundID string) (*model.RoundSnapshot, error) {
 	}
 	snap := &model.RoundSnapshot{ID: id, RoundID: roundID, State: model.SnapshotStatePublish, Summary: summary, CreatedAt: s.now().UTC()}
 	if err := s.store.PutPublishedSnapshotIfAbsent(snap); err != nil {
+		// 并发发布：另一请求已抢到该轮次唯一的发布槽位。失败请求得到冲突
+		// 结果，并附带当前唯一快照以便调用方定位胜出者。
+		if errors.Is(err, model.ErrSnapshotConflict) {
+			if winner, werr := s.store.GetPublishedSnapshot(roundID); werr == nil {
+				return nil, fmt.Errorf("%w: round %s already has snapshot %s", model.ErrSnapshotConflict, roundID, winner.ID)
+			}
+			return nil, err
+		}
 		return nil, err
 	}
 	return snap, nil

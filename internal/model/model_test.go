@@ -32,3 +32,16 @@ func TestStateTransitionsRejectTerminalMutation(t *testing.T) {
 		t.Fatalf("isolated update accepted reverse transition: %v", err)
 	}
 }
+
+func TestValidateSnapshotPublicationRejectsExistingPublish(t *testing.T) {
+	// 已有 publish 态快照 → 第二次发布应被拒绝为冲突。
+	if err := model.ValidateSnapshotPublication(model.SnapshotStatePublish); !errors.Is(err, model.ErrSnapshotConflict) {
+		t.Fatalf("existing publish should conflict, got %v", err)
+	}
+	// 草稿或被替代态不阻塞重新发布。
+	for _, st := range []string{model.SnapshotStateDraft, model.SnapshotStateSupersede} {
+		if err := model.ValidateSnapshotPublication(st); err != nil {
+			t.Fatalf("state %s should not block publication, got %v", st, err)
+		}
+	}
+}

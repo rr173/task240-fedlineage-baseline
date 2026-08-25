@@ -3,6 +3,8 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+
+	"task240-fedlineage/internal/model"
 )
 
 var errBadRound = errors.New("round_id required")
@@ -18,6 +20,11 @@ func (s *Server) handlePublishSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	snap, err := s.sv.Snapshot.Publish(req.ID, req.RoundID)
 	if err != nil {
+		// 同一轮次并发发布：已有一请求成功，其余请求得到冲突结果。
+		if errors.Is(err, model.ErrSnapshotConflict) {
+			writeErr(w, http.StatusConflict, err)
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}

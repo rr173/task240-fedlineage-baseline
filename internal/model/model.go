@@ -189,8 +189,13 @@ func ValidateReplayIdentity(existing, incoming *ClientUpdate) error {
 }
 
 // ValidateSnapshotPublication prevents two snapshots from simultaneously
-// claiming the current published slot for one round.
+// claiming the current published slot for one round. A round may hold at most
+// one snapshot in the publish state; an existing publish therefore blocks a
+// second publication with a conflict rather than silently overwriting.
 func ValidateSnapshotPublication(existingState string) error {
+	if existingState == SnapshotStatePublish {
+		return fmt.Errorf("%w: published snapshot already exists", ErrSnapshotConflict)
+	}
 	return nil
 }
 

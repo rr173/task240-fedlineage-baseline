@@ -4,10 +4,12 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"task240-fedlineage/internal/model"
 )
@@ -94,6 +96,9 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_updates_round ON client_updates(round_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_models_round ON global_models(round_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_edges_parent ON lineage_edges(parent);`,
+		// 每轮次至多一个 publish 态快照（部分唯一索引），保证并发发布只成一人。
+		// IF NOT EXISTS 使在含历史重复数据的旧库上迁移幂等、不中断。
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_round_published ON round_snapshots(round_id) WHERE state='publish';`,
 	}
 	for _, st := range stmts {
 		if _, err := db.Exec(st); err != nil {
@@ -235,22 +240,36 @@ func (s *Store) PutUpdate(u *model.ClientUpdate) error {
 }
 
 // PutPublishedSnapshotIfAbsent claims the single current publish slot for a
-// round in one SQLite statement. The caller may then safely report a conflict
-// when another writer won the race.
+// round in one atomic statement. The conditional INSERT is guarded by a
+// partial unique index (idx_round_published), so two concurrent writers cannot
+// both insert a publish snapshot for the same round: the loser observes 0 rows
+// affected or a SQLITE_CONSTRAINT_UNIQUE error, which is mapped to
+// model.ErrSnapshotConflict. The winner persists exactly one current snapshot.
 func (s *Store) PutPublishedSnapshotIfAbsent(snap *model.RoundSnapshot) error {
 	if snap.CreatedAt.IsZero() {
 		snap.CreatedAt = time.Now().UTC()
 	}
-	current, err := s.GetPublishedSnapshot(snap.RoundID)
-	if err != nil && err != model.ErrNotFound {
-		return err
-	}
-	if current != nil {
-		if err := model.ValidateSnapshotPublication(current.State); err != nil {
-			return err
+	res, err := s.db.Exec(
+		`INSERT INTO round_snapshots (id, round_id, state, summary, created_at)
+		 SELECT ?, ?, 'publish', ?, ?
+		 WHERE NOT EXISTS (SELECT 1 FROM round_snapshots WHERE round_id=? AND state='publish');`,
+		snap.ID, snap.RoundID, snap.Summary, nowStr(), snap.RoundID)
+	if err != nil {
+		var se *sqlite.Error
+		if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+			return fmt.Errorf("%w: round %s already has a published snapshot", model.ErrSnapshotConflict, snap.RoundID)
 		}
+		return fmt.Errorf("put published snapshot: %w", err)
 	}
-	return s.PutSnapshot(snap)
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("put published snapshot rows: %w", err)
+	}
+	if n == 0 {
+		// 部分唯一索引与条件插入等价：已有发布快照 → 本请求未抢到槽位。
+		return fmt.Errorf("%w: round %s already has a published snapshot", model.ErrSnapshotConflict, snap.RoundID)
+	}
+	return nil
 }
 
 // GetUpdate 读取客户端更新。
