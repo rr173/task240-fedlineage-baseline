@@ -30,11 +30,16 @@ func (s *Service) Register(id, parentID, roundID, paramDigest string, dimension 
 		return nil, fmt.Errorf("%w: model %s", model.ErrDuplicateID, id)
 	}
 	if parentID != "" {
-		_, err := s.store.GetModel(parentID)
+		parent, err := s.store.GetModel(parentID)
 		if err != nil {
 			if err == model.ErrNotFound {
 				return nil, fmt.Errorf("%w: model %s", model.ErrParentMissing, parentID)
 			}
+			return nil, err
+		}
+		// 维度一致性：子模型必须与父模型参数维度兼容，
+		// 否则该谱系关系不合法，在登记时即拒绝。
+		if err := model.ValidateDimensionCompatibility(dimension, parent.Dimension); err != nil {
 			return nil, err
 		}
 		cycle, err := s.DetectCycle(id, parentID)

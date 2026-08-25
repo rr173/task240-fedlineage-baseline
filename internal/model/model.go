@@ -142,6 +142,18 @@ func ValidateDimension(dimension int) error {
 	return nil
 }
 
+// ValidateDimensionCompatibility rejects a lineage relationship whose two ends
+// describe incompatible parameter shapes. The child and parent must agree on
+// the parameter tensor dimension; a mismatch means the child cannot be a
+// legitimate descendant of the parent, so the relationship must be rejected
+// at registration time or judged a fork at verification time.
+func ValidateDimensionCompatibility(childDim, parentDim int) error {
+	if childDim != parentDim {
+		return fmt.Errorf("%w: %d != parent %d", ErrDigestMismatch, childDim, parentDim)
+	}
+	return nil
+}
+
 // ValidateModelInput checks the identity fields that are required before a
 // node can participate in the lineage graph.
 func ValidateModelInput(id, roundID, paramDigest string, dimension int) error {

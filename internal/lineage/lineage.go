@@ -74,6 +74,17 @@ func (s *Service) Verify(updateID string) (*model.UpdateVerification, error) {
 			}
 			return &v, nil
 		}
+		// 维度一致性：更新声称的父模型参数维度必须与更新自身兼容。
+		// 即使更新维度与轮次期望一致，若与声明父模型维度不符，仍构成
+		// 不兼容谱系关系，判为分叉。
+		if err := model.ValidateDimensionCompatibility(u.Dimension, pm.Dimension); err != nil {
+			v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateForked,
+				Reason: fmt.Sprintf("parent model dimension %d != update %d", pm.Dimension, u.Dimension), VerifiedAt: s.now().UTC()}
+			if err := s.record(u, model.UpdateStateForked, v.Reason); err != nil {
+				return nil, err
+			}
+			return &v, nil
+		}
 	}
 	v := model.UpdateVerification{UpdateID: u.ID, RoundID: u.RoundID, Verdict: model.UpdateStateValid,
 		Reason: "parent relation and shape consistent", VerifiedAt: s.now().UTC()}

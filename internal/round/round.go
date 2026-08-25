@@ -36,11 +36,16 @@ func (s *Service) Register(id, parentRound string, expectedDim int) (*model.Aggr
 		return nil, fmt.Errorf("%w: round %s", model.ErrDuplicateID, id)
 	}
 	if parentRound != "" {
-		_, err := s.store.GetRound(parentRound)
+		parent, err := s.store.GetRound(parentRound)
 		if err != nil {
 			if err == model.ErrNotFound {
 				return nil, fmt.Errorf("%w: round %s", model.ErrParentMissing, parentRound)
 			}
+			return nil, err
+		}
+		// 维度一致性：子轮次的期望参数维度必须与父轮次兼容，
+		// 否则该谱系关系不合法，在登记时即拒绝。
+		if err := model.ValidateDimensionCompatibility(expectedDim, parent.ExpectedDim); err != nil {
 			return nil, err
 		}
 	}
