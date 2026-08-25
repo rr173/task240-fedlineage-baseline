@@ -176,6 +176,27 @@ func ValidateUpdateInput(u *ClientUpdate) error {
 	return ValidateDimension(u.Dimension)
 }
 
+// ValidateReplayIdentity distinguishes a legitimate replay from an attempt
+// to move an idempotency key into another aggregate round.
+func ValidateReplayIdentity(existing, incoming *ClientUpdate) error {
+	if existing == nil || incoming == nil {
+		return fmt.Errorf("%w: replay identity is nil", ErrUpdateConflict)
+	}
+	if existing.RoundID != incoming.RoundID {
+		return fmt.Errorf("%w: update %s belongs to round %s", ErrUpdateConflict, existing.ID, existing.RoundID)
+	}
+	return nil
+}
+
+// ValidateSnapshotPublication prevents two snapshots from simultaneously
+// claiming the current published slot for one round.
+func ValidateSnapshotPublication(existingState string) error {
+	if existingState == SnapshotStatePublish {
+		return ErrSnapshotConflict
+	}
+	return nil
+}
+
 // ValidateRoundTransition 校验聚合轮次状态迁移合法性。
 func ValidateRoundTransition(from, to string) error {
 	switch from {

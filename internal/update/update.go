@@ -39,8 +39,8 @@ func (s *Service) Receive(u *model.ClientUpdate) (*model.ClientUpdate, error) {
 	// 幂等检查：已存在相同 ID 更新 → 重放。
 	existing, err := s.store.GetUpdate(u.ID)
 	if err == nil {
-		if existing.RoundID != u.RoundID {
-			return nil, fmt.Errorf("%w: update %s belongs to round %s", model.ErrUpdateConflict, u.ID, existing.RoundID)
+		if err := model.ValidateReplayIdentity(existing, u); err != nil {
+			return nil, err
 		}
 		// 更新为 replay 状态并记录。
 		existing.State = model.UpdateStateReplay

@@ -226,12 +226,38 @@ func (s *Store) PutUpdate(u *model.ClientUpdate) error {
 	_, err := s.db.Exec(
 		`INSERT INTO client_updates (id, round_id, client_id, parent_model, param_digest, dimension, state, reason, created_at)
 		 VALUES (?,?,?,?,?,?,?,?,?)
-		 ON CONFLICT(id) DO UPDATE SET round_id=excluded.round_id, client_id=excluded.client_id,
-		   parent_model=excluded.parent_model, param_digest=excluded.param_digest, dimension=excluded.dimension,
-		   state=excluded.state, reason=excluded.reason;`,
+		 ON CONFLICT(id) DO UPDATE SET state=excluded.state, reason=excluded.reason;`,
 		u.ID, u.RoundID, u.ClientID, u.ParentModel, u.ParamDigest, u.Dimension, u.State, u.Reason, nowStr())
 	if err != nil {
 		return fmt.Errorf("put update: %w", err)
+	}
+	return nil
+}
+
+// PutPublishedSnapshotIfAbsent claims the single current publish slot for a
+// round in one SQLite statement. The caller may then safely report a conflict
+// when another writer won the race.
+func (s *Store) PutPublishedSnapshotIfAbsent(snap *model.RoundSnapshot) error {
+	if snap.CreatedAt.IsZero() {
+		snap.CreatedAt = time.Now().UTC()
+	}
+	result, err := s.db.Exec(
+		`INSERT INTO round_snapshots (id, round_id, state, summary, created_at)
+		 SELECT ?, ?, ?, ?, ?
+		 WHERE NOT EXISTS (
+			SELECT 1 FROM round_snapshots WHERE round_id=? AND state=?
+		 );`,
+		snap.ID, snap.RoundID, snap.State, snap.Summary, snap.CreatedAt.Format(time.RFC3339),
+		snap.RoundID, model.SnapshotStatePublish)
+	if err != nil {
+		return fmt.Errorf("put published snapshot: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("published snapshot result: %w", err)
+	}
+	if count == 0 {
+		return model.ErrSnapshotConflict
 	}
 	return nil
 }

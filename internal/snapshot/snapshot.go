@@ -40,9 +40,11 @@ func (s *Service) Publish(id, roundID string) (*model.RoundSnapshot, error) {
 	if _, err := s.store.GetSnapshot(id); err == nil {
 		return nil, fmt.Errorf("%w: snapshot %s", model.ErrDuplicateID, id)
 	}
-	if current, err := s.store.GetPublishedSnapshot(roundID); err == nil && current.State == model.SnapshotStatePublish {
-		return nil, fmt.Errorf("%w: round %s already has snapshot %s", model.ErrSnapshotConflict, roundID, current.ID)
-	} else if err != nil && err != model.ErrNotFound {
+	if current, err := s.store.GetPublishedSnapshot(roundID); err == nil {
+		if err := model.ValidateSnapshotPublication(current.State); err != nil {
+			return nil, fmt.Errorf("%w: round %s already has snapshot %s", err, roundID, current.ID)
+		}
+	} else if err != model.ErrNotFound {
 		return nil, err
 	}
 	set, err := s.aggregate.Compute(roundID)
@@ -54,7 +56,7 @@ func (s *Service) Publish(id, roundID string) (*model.RoundSnapshot, error) {
 		return nil, err
 	}
 	snap := &model.RoundSnapshot{ID: id, RoundID: roundID, State: model.SnapshotStatePublish, Summary: summary, CreatedAt: s.now().UTC()}
-	if err := s.store.PutSnapshot(snap); err != nil {
+	if err := s.store.PutPublishedSnapshotIfAbsent(snap); err != nil {
 		return nil, err
 	}
 	return snap, nil
